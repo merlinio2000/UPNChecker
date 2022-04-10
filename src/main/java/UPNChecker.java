@@ -11,17 +11,19 @@ public class UPNChecker {
         return (character == '*' || character == '+');
     }
 
-    // requires word to be trimmed externally
-    public static State transition(State currentState, String word, UPNStack stack) {
+    public static State transition(State currentState, StrRef wRef, UPNStack stack) {
 
-        System.out.println("currentState = " + currentState + ", word = " + word + ", stack = " + stack);
+        System.out.println("currentState = " + currentState + ", word = " + wRef.inner + ", stack = " + stack);
 
         Character wordChar;
-        if (!word.isEmpty()) {
-             wordChar = word.charAt(0);
-        } else {
+        if (wRef.inner.isEmpty()) {
             wordChar = null;
+        } else {
+            wordChar = wRef.inner.charAt(0);
+            wRef.inner = wRef.inner.substring(1);
         }
+        boolean lastElem = (stack.size() == 1);
+
         Integer stackVal = stack.pop();
 
         switch (currentState) {
@@ -32,31 +34,27 @@ public class UPNChecker {
                 }
             }
             case Q1 -> {
-                if (isZ(wordChar)) {
+                if (isZ(wordChar) && lastElem) {
                     stack.pushMany(stackVal, Character.getNumericValue(wordChar));
                     return State.Q2;
-                } else if (wordChar == null) {
-                    stack.push(stackVal);
-                    return State.Q1;
                 }
             }
             case Q2 -> {
-                if (isZ(wordChar)) {
+                if (isZ(wordChar) && !lastElem) {
                     stack.pushMany(stackVal, Character.getNumericValue(wordChar));
                     return State.Q2;
-                } else if (isO(wordChar)) {
+                } else if (isO(wordChar) && !lastElem) {
                     Integer secondOperand = stack.pop();
                     switch (wordChar) {
                         case '+' -> stack.push(stackVal + secondOperand);
                         case '*' -> stack.push(stackVal * secondOperand);
                         default -> throw new RuntimeException("Unexpected operation " + wordChar);
                     }
-
                     return State.Q3;
                 }
             }
             case Q3 -> {
-                if (isO(wordChar)) {
+                if (isO(wordChar) && !lastElem) {
                     Integer secondOperand = stack.pop();
 
                     if (secondOperand == null) {
@@ -69,10 +67,13 @@ public class UPNChecker {
                         default -> throw new RuntimeException("Unexpected operation " + wordChar);
                     }
                     return State.Q3;
-                } else if (isZ(wordChar)) {
+                } else if (isZ(wordChar) && !lastElem) {
                     stack.pushMany(stackVal, Character.getNumericValue(wordChar));
                     return State.Q2;
-                } else if (wordChar == null) {
+                } else if (lastElem) {
+                    // we dont read the character of the word in this transition, so add it back to fake it
+                    if (wordChar != null)
+                        wRef.inner = wordChar + wRef.inner;
                     stack.push(stackVal);
                     return State.Q1;
                 }
@@ -92,23 +93,16 @@ public class UPNChecker {
         }
 
 
-
-        String word = args[0];
+		StrRef wRef = new StrRef();
+		wRef.inner = args[0];
         State state = State.Q0;
         UPNStack stack = new UPNStack();
 
 
-        while (!(word.isEmpty() && state == State.Q1)) {
-            State newState = transition(state, word, stack);
-
-            if (newState == State.GARBAGE) {
-                state = newState;
+        while (!(wRef.inner.isEmpty() && state.isAccepting)) {
+            state = transition(state, wRef, stack);
+            if (state == State.GARBAGE) {
                 break;
-            } else {
-                state = newState;
-                if (!word.isEmpty()) {
-                    word = word.substring(1);
-                }
             }
         }
 
@@ -121,6 +115,10 @@ public class UPNChecker {
             System.err.println("This state is not accepting!");
         }
     }
+	
+	private static class StrRef {
+		public String inner;
+	}
 
 
     enum State {
@@ -135,7 +133,6 @@ public class UPNChecker {
         State() {
             this(false);
         }
-
     }
 
 
